@@ -1,0 +1,1445 @@
+apiVersion: v1
+kind: List
+
+items:
+
+# --------------------------=== pod 0 ===--------------------------
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: node-0
+    namespace: substrate-net
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: substrate-node-0
+    template:
+      metadata:
+        labels:
+          name: substrate-node-0
+          serviceSelector: substrate-node
+      spec:
+        securityContext:
+          fsGroup: 101
+        containers:
+          - name: substrate-node
+            image: projetsim/substrate-sim:latest
+            resources:
+              requests:
+                memory: "10Gi"
+                #cpu: "0.5"
+                ephemeral-storage: "1500Mi"
+              limits:
+                memory: "11Gi"
+                #cpu: "1.1"
+                ephemeral-storage: "2Gi"
+            ports:
+              - name: p2p
+                containerPort: 30333
+              - name: websocket
+                containerPort: 9944
+              - name: rpc
+                containerPort: 9933
+            envFrom:
+              - configMapRef:
+                  name: keys-config
+            command:
+              - bash
+            args:
+              - -c
+              - |
+                  # Start Alice's node
+                  RUST_LOG=runtime=debug
+                  node-template \
+                    --base-path /tmp/alice \
+                    --chain local \
+                    --alice \
+                    --port 30333 \
+                    --ws-port 9944 \
+                    --rpc-port 9933 \
+                    --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
+                    --unsafe-ws-external \
+                    --unsafe-rpc-external \
+                    --rpc-cors=all \
+                    --prometheus-external \
+                    -lmydebug=debug \
+                    --validator 
+                    
+            volumeMounts:
+              - name: sawtooth-data-0
+                mountPath: /var/lib/sawtooth
+
+        volumes:
+          - name: sawtooth-data-0
+            persistentVolumeClaim:
+            claimName: sawtooth-data-0
+
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: substrate-node-0
+    namespace: substrate-net
+  spec:
+    type: ClusterIP
+    selector:
+      name: substrate-node-0
+    ports:
+      - name: "4004"
+        protocol: TCP
+        port: 4004
+        targetPort: 4004
+      - name: "5050"
+        protocol: TCP
+        port: 5050
+        targetPort: 5050
+      - name: "8008"
+        protocol: TCP
+        port: 8008
+        targetPort: 8008
+      - name: "8080"
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+      - name: "8800"
+        protocol: TCP
+        port: 8800
+        targetPort: 8800
+
+
+# --------------------------=== pod 1 ===--------------------------
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: node-1
+    namespace: substrate-net
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: sawtooth-1
+    template:
+      metadata:
+        labels:
+          name: sawtooth-1
+          serviceSelector: sawtooth-node
+      spec:
+        securityContext:
+          fsGroup: 101
+        containers:
+          - name: sawtooth-pbft-engine
+            image: hyperledger/sawtooth-pbft-engine:chime
+            resources:
+              requests:
+                # memory: "125Mi"
+                # cpu: "0.2"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "250Mi"
+                # cpu: "0.5"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "pbft-engine -v --connect tcp://$HOSTNAME:5050"
+
+          - name: sawtooth-rest-api
+            image: hyperledger/sawtooth-rest-api:chime
+            resources:
+              requests:
+                # memory: "250Mi"
+                # cpu: "0.2"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "375Mi"
+                # cpu: "0.5"
+                ephemeral-storage: "375Mi"
+            ports:
+              - name: api
+                containerPort: 8008
+            command:
+              - bash
+            args:
+              - -c
+              - "sawtooth-rest-api -v -C tcp://$HOSTNAME:4004 -B 0.0.0.0:8008"
+            volumeMounts:
+              - name: validator-config-volume
+                mountPath: /etc/sawtooth/rest_api.toml
+                subPath: validator.toml
+
+            readinessProbe:
+              httpGet:
+                path: /status
+                port: 8008
+              initialDelaySeconds: 15
+              periodSeconds: 10
+
+          - name: sawtooth-settings-tp
+            image: hyperledger/sawtooth-settings-tp:chime
+            resources:
+              requests:
+                # memory: "25Mi"
+                # cpu: "25m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "37Mi"
+                # cpu: "35m"
+                ephemeral-storage: "50Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "settings-tp -v -C tcp://$HOSTNAME:4004"
+
+          - name: sawtooth-shell
+            image: hyperledger/sawtooth-shell:chime
+            resources:
+              requests:
+                # memory: "25Mi"
+                # cpu: "25m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "37Mi"
+                # cpu: "35m"
+                ephemeral-storage: "50Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "sawtooth keygen && tail -f /dev/null"
+          
+          - name: sawtooth-car-tp-1
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-2
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+          
+          - name: sawtooth-car-tp-3
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+          
+          - name: sawtooth-car-tp-4
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-5
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-6
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-7
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-8
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-9
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-10
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-validator
+            image: projetsim/sawtooth-validator:queuesize-200
+            resources:
+              requests:
+                memory: "10Gi"
+                # cpu: "0.5"
+                ephemeral-storage: "1500Mi"
+              limits:
+                memory: "11Gi"
+                # cpu: "1.1"
+                ephemeral-storage: "2Gi"
+            ports:
+              - name: tp
+                containerPort: 4004
+              - name: consensus
+                containerPort: 5050
+              - name: validators
+                containerPort: 8800
+            env:
+              - name: pbft1priv
+                valueFrom:
+                  configMapKeyRef:
+                    name: keys-config
+                    key: pbft1priv
+              - name: pbft1pub
+                valueFrom:
+                  configMapKeyRef:
+                    name: keys-config
+                    key: pbft1pub
+            command:
+              - bash
+            args:
+              - -c
+              - |
+                  rm -rf /var/lib/sawtooth/* &&
+                  if [ ! -e /etc/sawtooth/keys/validator.priv ]; then
+                    echo $pbft1priv > /etc/sawtooth/keys/validator.priv
+                    echo $pbft1pub > /etc/sawtooth/keys/validator.pub
+                  fi &&
+                  sawtooth keygen my_key &&
+                  sawtooth-validator -v \
+                    --endpoint tcp://$SAWTOOTH_1_SERVICE_HOST:8800 \
+                    --bind component:tcp://eth0:4004 \
+                    --bind consensus:tcp://eth0:5050 \
+                    --bind network:tcp://eth0:8800 \
+                    --scheduler parallel \
+                    --peering static \
+                    --maximum-peer-connectivity 10000 \
+                    --peers tcp://$SAWTOOTH_0_SERVICE_HOST:8800
+            volumeMounts:
+              - name: validator-config-volume
+                mountPath: /etc/sawtooth/validator.toml
+                subPath: validator.toml
+              - name: sawtooth-data-1
+                mountPath: /var/lib/sawtooth
+          - name: sawtooth-xo-tp-python
+            image: hyperledger/sawtooth-xo-tp-python:chime
+            resources:
+              resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "125m"
+                ephemeral-storage: "200Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "xo-tp-python -v -C tcp://$HOSTNAME:4004"
+        volumes:
+          - name: validator-config-volume
+            configMap:
+              name: validator-influx-config
+              defaultMode: 0640
+          - name: sawtooth-data-1
+            persistentVolumeClaim:
+            claimName: sawtooth-data-1
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: sawtooth-1
+    namespace: substrate-net
+  spec:
+    type: ClusterIP
+    selector:
+      name: sawtooth-1
+    ports:
+      - name: "4004"
+        protocol: TCP
+        port: 4004
+        targetPort: 4004
+      - name: "5050"
+        protocol: TCP
+        port: 5050
+        targetPort: 5050
+      - name: "8008"
+        protocol: TCP
+        port: 8008
+        targetPort: 8008
+      - name: "8080"
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+      - name: "8800"
+        protocol: TCP
+        port: 8800
+        targetPort: 8800
+
+# --------------------------=== pod 2 ===--------------------------
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: node-2
+    namespace: substrate-net
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: sawtooth-2
+    template:
+      metadata:
+        labels:
+          name: sawtooth-2
+          serviceSelector: sawtooth-node
+      spec:
+        securityContext:
+          fsGroup: 101
+        containers:
+          - name: sawtooth-pbft-engine
+            image: hyperledger/sawtooth-pbft-engine:chime
+            resources:
+              requests:
+                # memory: "125Mi"
+                # cpu: "0.2"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "250Mi"
+                # cpu: "0.5"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "pbft-engine -v --connect tcp://$HOSTNAME:5050"
+
+          - name: sawtooth-rest-api
+            image: hyperledger/sawtooth-rest-api:chime
+            resources:
+              requests:
+                # memory: "250Mi"
+                # cpu: "0.2"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "375Mi"
+                # cpu: "0.5"
+                ephemeral-storage: "375Mi"
+            ports:
+              - name: api
+                containerPort: 8008
+            command:
+              - bash
+            args:
+              - -c
+              - "sawtooth-rest-api -v -C tcp://$HOSTNAME:4004 -B 0.0.0.0:8008"
+            
+            volumeMounts:
+              - name: validator-config-volume
+                mountPath: /etc/sawtooth/rest_api.toml
+                subPath: validator.toml
+
+            readinessProbe:
+              httpGet:
+                path: /status
+                port: 8008
+              initialDelaySeconds: 30
+              periodSeconds: 10
+
+          - name: sawtooth-settings-tp
+            image: hyperledger/sawtooth-settings-tp:chime
+            resources:
+              requests:
+                # memory: "25Mi"
+                # cpu: "25m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "37Mi"
+                # cpu: "35m"
+                ephemeral-storage: "50Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "settings-tp -v -C tcp://$HOSTNAME:4004"
+
+          - name: sawtooth-shell
+            image: hyperledger/sawtooth-shell:chime
+            resources:
+              requests:
+                # memory: "25Mi"
+                # cpu: "25m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "37Mi"
+                # cpu: "35m"
+                ephemeral-storage: "50Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "sawtooth keygen && tail -f /dev/null"
+
+          - name: sawtooth-car-tp-1
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-2
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+          
+          - name: sawtooth-car-tp-3
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+          
+          - name: sawtooth-car-tp-4
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-5
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-6
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-7
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-8
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-9
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-10
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-validator
+            image: projetsim/sawtooth-validator:queuesize-200
+            resources:
+              requests:
+                memory: "10Gi"
+                # cpu: "0.5"
+                ephemeral-storage: "1500Mi"
+              limits:
+                memory: "11Gi"
+                # cpu: "1.1"
+                ephemeral-storage: "2Gi"
+            ports:
+              - name: tp
+                containerPort: 4004
+              - name: consensus
+                containerPort: 5050
+              - name: validators
+                containerPort: 8800
+            env:
+              - name: pbft2priv
+                valueFrom:
+                  configMapKeyRef:
+                    name: keys-config
+                    key: pbft2priv
+              - name: pbft2pub
+                valueFrom:
+                  configMapKeyRef:
+                    name: keys-config
+                    key: pbft1pub
+            command:
+              - bash
+            args:
+              - -c
+              - |
+                  rm -rf /var/lib/sawtooth/* &&
+                  if [ ! -e /etc/sawtooth/keys/validator.priv ]; then
+                    echo $pbft2priv > /etc/sawtooth/keys/validator.priv
+                    echo $pbft2pub > /etc/sawtooth/keys/validator.pub
+                  fi &&
+                  sawtooth keygen my_key &&
+                  sawtooth-validator -v \
+                    --endpoint tcp://$SAWTOOTH_2_SERVICE_HOST:8800 \
+                    --bind component:tcp://eth0:4004 \
+                    --bind consensus:tcp://eth0:5050 \
+                    --bind network:tcp://eth0:8800 \
+                    --scheduler parallel \
+                    --peering static \
+                    --maximum-peer-connectivity 10000 \
+                    --peers tcp://$SAWTOOTH_0_SERVICE_HOST:8800 \
+                    --peers tcp://$SAWTOOTH_1_SERVICE_HOST:8800
+            volumeMounts:
+              - name: validator-config-volume
+                mountPath: /etc/sawtooth/validator.toml
+                subPath: validator.toml
+              - name: sawtooth-data-2
+                mountPath: /var/lib/sawtooth
+          - name: sawtooth-xo-tp-python
+            image: hyperledger/sawtooth-xo-tp-python:chime
+            resources:
+              resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "125m"
+                ephemeral-storage: "200Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "xo-tp-python -v -C tcp://$HOSTNAME:4004"
+        volumes:
+          - name: validator-config-volume
+            configMap:
+              name: validator-influx-config
+              defaultMode: 0640
+          - name: sawtooth-data-2
+            persistentVolumeClaim:
+            claimName: sawtooth-data-2
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: sawtooth-2
+    namespace: substrate-net
+  spec:
+    type: ClusterIP
+    selector:
+      name: sawtooth-2
+    ports:
+      - name: "4004"
+        protocol: TCP
+        port: 4004
+        targetPort: 4004
+      - name: "5050"
+        protocol: TCP
+        port: 5050
+        targetPort: 5050
+      - name: "8008"
+        protocol: TCP
+        port: 8008
+        targetPort: 8008
+      - name: "8080"
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+      - name: "8800"
+        protocol: TCP
+        port: 8800
+        targetPort: 8800
+
+
+# --------------------------=== pod 3 ===--------------------------
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: node-3
+    namespace: substrate-net
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        name: sawtooth-3
+    template:
+      metadata:
+        labels:
+          name: sawtooth-3
+          serviceSelector: sawtooth-node
+      spec:
+        securityContext:
+          fsGroup: 101
+        containers:
+          
+          - name: sawtooth-pbft-engine
+            image: hyperledger/sawtooth-pbft-engine:chime
+            resources:
+              requests:
+                # memory: "125Mi"
+                # cpu: "0.2"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "250Mi"
+                # cpu: "0.5"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "pbft-engine -v --connect tcp://$HOSTNAME:5050"
+
+          - name: sawtooth-rest-api
+            image: hyperledger/sawtooth-rest-api:chime
+            resources:
+              requests:
+                # memory: "250Mi"
+                # cpu: "0.2"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "375Mi"
+                # cpu: "0.5"
+                ephemeral-storage: "375Mi"
+            ports:
+              - name: api
+                containerPort: 8008
+            command:
+              - bash
+            args:
+              - -c
+              - "sawtooth-rest-api -v -C tcp://$HOSTNAME:4004 -B 0.0.0.0:8008"
+            volumeMounts:
+              - name: validator-config-volume
+                mountPath: /etc/sawtooth/rest_api.toml
+                subPath: validator.toml
+
+            readinessProbe:
+              httpGet:
+                path: /status
+                port: 8008
+              initialDelaySeconds: 15
+              periodSeconds: 10
+
+          - name: sawtooth-settings-tp
+            image: hyperledger/sawtooth-settings-tp:chime
+            resources:
+              requests:
+                # memory: "25Mi"
+                # cpu: "25m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "37Mi"
+                # cpu: "35m"
+                ephemeral-storage: "50Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "settings-tp -v -C tcp://$HOSTNAME:4004"
+
+          - name: sawtooth-shell
+            image: hyperledger/sawtooth-shell:chime
+            resources:
+              requests:
+                # memory: "25Mi"
+                # cpu: "25m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "37Mi"
+                # cpu: "35m"
+                ephemeral-storage: "50Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "sawtooth keygen && tail -f /dev/null"
+
+          - name: sawtooth-car-tp-1
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-2
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+          
+          - name: sawtooth-car-tp-3
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+          
+          - name: sawtooth-car-tp-4
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-5
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-6
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-7
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-8
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-9
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+          - name: sawtooth-car-tp-10
+            image: projetsim/cartp-tp-rust:latest
+            resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "250Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "500Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - | 
+                  /project/sawtooth-sdk-rust/examples/cartp_rust/bin/cartp-tp-rust -C tcp://$HOSTNAME:4004 
+
+
+          - name: sawtooth-validator
+            image: projetsim/sawtooth-validator:queuesize-200
+            resources:
+              requests:
+                memory: "10Gi"
+                # cpu: "0.5"
+                ephemeral-storage: "1500Mi"
+              limits:
+                memory: "11Gi"
+                # cpu: "1.1"
+                ephemeral-storage: "2Gi"
+            ports:
+              - name: tp
+                containerPort: 4004
+              - name: consensus
+                containerPort: 5050
+              - name: validators
+                containerPort: 8800
+            env:
+              - name: pbft3priv
+                valueFrom:
+                  configMapKeyRef:
+                    name: keys-config
+                    key: pbft3priv
+              - name: pbft3pub
+                valueFrom:
+                  configMapKeyRef:
+                    name: keys-config
+                    key: pbft3pub
+            command:
+              - bash
+            args:
+              - -c
+              - |
+                  rm -rf /var/lib/sawtooth/* &&
+                  if [ ! -e /etc/sawtooth/keys/validator.priv ]; then
+                    echo $pbft3priv > /etc/sawtooth/keys/validator.priv
+                    echo $pbft3pub > /etc/sawtooth/keys/validator.pub
+                  fi &&
+                  sawtooth keygen my_key &&
+                  sawtooth-validator -v \
+                    --endpoint tcp://$SAWTOOTH_3_SERVICE_HOST:8800 \
+                    --bind component:tcp://eth0:4004 \
+                    --bind consensus:tcp://eth0:5050 \
+                    --bind network:tcp://eth0:8800 \
+                    --scheduler parallel \
+                    --peering static \
+                    --maximum-peer-connectivity 10000 \
+                    --peers tcp://$SAWTOOTH_0_SERVICE_HOST:8800 \
+                    --peers tcp://$SAWTOOTH_1_SERVICE_HOST:8800 \
+                    --peers tcp://$SAWTOOTH_2_SERVICE_HOST:8800
+            volumeMounts:
+              - name: validator-config-volume
+                mountPath: /etc/sawtooth/validator.toml
+                subPath: validator.toml
+              - name: sawtooth-data-3
+                mountPath: /var/lib/sawtooth
+          - name: sawtooth-xo-tp-python
+            image: hyperledger/sawtooth-xo-tp-python:chime
+            resources:
+              resources:
+              requests:
+                # memory: "50Mi"
+                # cpu: "50m"
+                ephemeral-storage: "50Mi"
+              limits:
+                # memory: "50Mi"
+                # cpu: "125m"
+                ephemeral-storage: "200Mi"
+            command:
+              - bash
+            args:
+              - -c
+              - "xo-tp-python -v -C tcp://$HOSTNAME:4004"
+        volumes:
+          - name: validator-config-volume
+            configMap:
+              name: validator-influx-config
+              defaultMode: 0640
+          - name: sawtooth-data-3
+            persistentVolumeClaim:
+            claimName: sawtooth-data-3
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: sawtooth-3
+    namespace: substrate-net
+  spec:
+    type: ClusterIP
+    selector:
+      name: sawtooth-3
+    ports:
+      - name: "4004"
+        protocol: TCP
+        port: 4004
+        targetPort: 4004
+      - name: "5050"
+        protocol: TCP
+        port: 5050
+        targetPort: 5050
+      - name: "8008"
+        protocol: TCP
+        port: 8008
+        targetPort: 8008
+      - name: "8080"
+        protocol: TCP
+        port: 8080
+        targetPort: 8080
+      - name: "8800"
+        protocol: TCP
+        port: 8800
+        targetPort: 8800
+
+
+#--------------------------=ONE SERVICE FOR ALL NODE=--------------------------------
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: api-rest-service
+    namespace: substrate-net
+  spec:
+    type: ClusterIP
+    selector:
+      serviceSelector: sawtooth-node
+    ports:
+      - name: "8008"
+        protocol: TCP
+        port: 8008
+        targetPort: 8008
+#---------------------------------=NODES VOLUMES=---------------------------------------
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: sawtooth-node-0
+    labels:
+      type: local
+  spec:
+    storageClassName: manual
+    capacity:
+      storage: 50Gi
+    accessModes:
+      - ReadWriteOnce
+    persistentVolumeReclaimPolicy: Recycle
+    hostPath:
+      path: "/datas/substrate-node-0"
+
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: sawtooth-node-1
+    labels:
+      type: local
+  spec:
+    storageClassName: manual
+    capacity:
+      storage: 50Gi
+    accessModes:
+      - ReadWriteOnce
+    persistentVolumeReclaimPolicy: Recycle
+    hostPath:
+      path: "/datas/sawtooth-1"
+
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: sawtooth-node-2
+    labels:
+      type: local
+  spec:
+    storageClassName: manual
+    capacity:
+      storage: 50Gi
+    accessModes:
+      - ReadWriteOnce
+    persistentVolumeReclaimPolicy: Recycle
+    hostPath:
+      path: "/datas/sawtooth-2"
+
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: sawtooth-node-3
+    labels:
+      type: local
+  spec:
+    storageClassName: manual
+    capacity:
+      storage: 50Gi
+    accessModes:
+      - ReadWriteOnce
+    persistentVolumeReclaimPolicy: Recycle
+    hostPath:
+      path: "/datas/sawtooth-3"
+
+#--------------------------=PERSISTENT VOLUME CLAIM=------------------------------
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    labels:
+      app: sawtooth-data
+    name: sawtooth-data-0
+    namespace: substrate-net
+  spec:
+    storageClassName: manual
+    accessModes:
+    - ReadWriteOnce
+    resources:
+     requests:
+        storage: 45Gi
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    labels:
+      app: sawtooth-data
+    name: sawtooth-data-1
+    namespace: substrate-net
+  spec:
+    storageClassName: manual
+    accessModes:
+    - ReadWriteOnce
+    resources:
+     requests:
+        storage: 45Gi
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    labels:
+      app: sawtooth-data
+    name: sawtooth-data-2
+    namespace: substrate-net
+  spec:
+    storageClassName: manual
+    accessModes:
+    - ReadWriteOnce
+    resources:
+     requests:
+        storage: 45Gi
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    labels:
+      app: sawtooth-data
+    name: sawtooth-data-3
+    namespace: substrate-net
+  spec:
+    storageClassName: manual
+    accessModes:
+    - ReadWriteOnce
+    resources:
+     requests:
+        storage: 45Gi

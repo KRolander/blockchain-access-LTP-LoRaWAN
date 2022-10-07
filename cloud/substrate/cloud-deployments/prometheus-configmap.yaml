@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |2
+    global:
+      scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+      evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+      # scrape_timeout is set to the global default (10s).
+
+    rule_files:
+    scrape_configs:
+      - job_name: "substrate-0"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-0.substrate-net:9615"]
+          
+      - job_name: "substrate-1"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-1.substrate-net:9615"]
+
+      - job_name: "substrate-2"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-2.substrate-net:9615"]
+
+      - job_name: "substrate-3"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-3.substrate-net:9615"]
+
+      - job_name: "substrate-4"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-4.substrate-net:9615"]
+      - job_name: "substrate-5"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-5.substrate-net:9615"]
+      - job_name: "substrate-6"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-6.substrate-net:9615"]
+      - job_name: "substrate-7"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-7.substrate-net:9615"]
+      - job_name: "substrate-8"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-8.substrate-net:9615"]
+      - job_name: "substrate-9"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-9.substrate-net:9615"]
+      - job_name: "substrate-10"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-10.substrate-net:9615"]
+      - job_name: "substrate-11"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-11.substrate-net:9615"]
+      - job_name: "substrate-12"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-12.substrate-net:9615"]
+      - job_name: "substrate-13"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-13.substrate-net:9615"]
+      - job_name: "substrate-14"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-14.substrate-net:9615"]
+      - job_name: "substrate-15"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-15.substrate-net:9615"]
+      - job_name: "substrate-16"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-16.substrate-net:9615"]
+      - job_name: "substrate-17"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-17.substrate-net:9615"]
+      - job_name: "substrate-18"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-18.substrate-net:9615"]
+      - job_name: "substrate-19"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-19.substrate-net:9615"]
+      - job_name: "substrate-20"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-20.substrate-net:9615"]
+      - job_name: "substrate-21"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-21.substrate-net:9615"]
+      - job_name: "substrate-22"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-22.substrate-net:9615"]
+      - job_name: "substrate-23"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-23.substrate-net:9615"]
+      - job_name: "substrate-24"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-24.substrate-net:9615"]
+      - job_name: "substrate-25"
+        scrape_interval: 500ms
+        static_configs:
+          - targets: ["substrate-25.substrate-net:9615"]

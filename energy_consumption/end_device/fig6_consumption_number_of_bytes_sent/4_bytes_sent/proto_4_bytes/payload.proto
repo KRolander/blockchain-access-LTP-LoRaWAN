@@ -1,0 +1,31 @@
+
+syntax = "proto2";
+
+enum Blockchain {
+   HYPERLEDGER_FABRIC = 0;
+   HYPERLEDGER_SAWTOOTH = 1;
+   SUBSTRATE = 2;
+   ETHEREUM = 3;
+ }
+
+ enum Action {
+   SET_DATA = 0;
+   GET_DATA = 1;
+ }
+
+message Payload {
+  required bytes public_key = 1;
+  required bytes signature = 2;
+  required Message message = 3;
+}
+message Message {
+  required Blockchain blockchain_id = 1;
+  required string smart_contract_name = 2; 
+  required Action action = 3;
+  required Sensors_uca_board sensors_uca_board= 4;
+}
+message Sensors_uca_board {
+  required float temperature = 1;
+
+}
+

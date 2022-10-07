@@ -1,0 +1,82 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    field.cattle.io/publicEndpoints: '[{"addresses":["192.168.111.11","192.168.111.12","192.168.111.13","192.168.111.21","192.168.111.22","192.168.111.23"],"port":80,"protocol":"HTTP","serviceName":"substrate-net:substrate-ws-service","ingressName":"substrate-net:substrate-ws","hostname":"substrate-ws.unice.cust.tasfrance.com","path":"/","allNodes":false}]'
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/server-snippets: |-
+      |
+         location / {
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_http_version 1.1;
+          proxy_set_header X-Forwarded-Host $http_host;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_set_header Host $host;
+          proxy_set_header Connection "upgrade";
+          proxy_cache_bypass $http_upgrade;
+          }
+    nginx.org/websocket-services: substrate-ws-service
+  creationTimestamp: "2021-06-07T10:14:51Z"
+  generation: 14
+  managedFields:
+  - apiVersion: networking.k8s.io/v1beta1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:status:
+        f:loadBalancer:
+          f:ingress: {}
+    manager: nginx-ingress-controller
+    operation: Update
+    time: "2021-06-07T10:15:47Z"
+  - apiVersion: extensions/v1beta1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          .: {}
+          f:field.cattle.io/publicEndpoints: {}
+    manager: rancher
+    operation: Update
+    time: "2021-06-07T10:15:47Z"
+  - apiVersion: networking.k8s.io/v1beta1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:metadata:
+        f:annotations:
+          f:kubernetes.io/ingress.class: {}
+          f:nginx.ingress.kubernetes.io/proxy-read-timeout: {}
+          f:nginx.ingress.kubernetes.io/proxy-send-timeout: {}
+          f:nginx.ingress.kubernetes.io/server-snippets: {}
+          f:nginx.org/websocket-services: {}
+      f:spec:
+        f:rules: {}
+    manager: rancher
+    operation: Update
+    time: "2021-06-08T08:58:15Z"
+  name: substrate-ws
+  namespace: substrate-net
+  resourceVersion: "52681926"
+  selfLink: /apis/networking.k8s.io/v1beta1/namespaces/substrate-net/ingresses/substrate-ws
+  uid: e4ddefbc-185a-4a77-90e9-65b2c8f851b3
+spec:
+  rules:
+  - host: substrate-ws.unice.cust.tasfrance.com
+    http:
+      paths:
+      - backend:
+          serviceName: substrate-ws-service
+          servicePort: 9944
+        path: /
+        pathType: Prefix
+status:
+  loadBalancer:
+    ingress:
+    - ip: 192.168.111.11
+    - ip: 192.168.111.12
+    - ip: 192.168.111.13
+    - ip: 192.168.111.21
+    - ip: 192.168.111.22
+    - ip: 192.168.111.23

@@ -1,0 +1,51 @@
+
+syntax = "proto2";
+
+enum Blockchain {
+   HYPERLEDGER_FABRIC = 0;
+   HYPERLEDGER_SAWTOOTH = 1;
+   SUBSTRATE = 2;
+   ETHEREUM = 3;
+ }
+
+ enum Action {
+   SET_DATA = 0;
+   GET_DATA = 1;
+ }
+
+message Payload {
+  required bytes public_key = 1;
+  required bytes signature = 2;
+  required Message message = 3;
+}
+message Message {
+  required Blockchain blockchain_id = 1;
+  required string smart_contract_name = 2; 
+  required Action action = 3;
+  required Sensors_uca_board sensors_uca_board= 4;
+}
+message Sensors_uca_board {
+  required float temperature = 1;
+  required float altitude = 2; 
+  required float pressure = 3;
+  required float axis_x = 4;
+  required float temperature2 = 5;
+  required float altitude2 = 6; 
+  required float pressure2 = 7;
+  required float axis_x2 = 8;
+  required float temperature3 = 9;
+  required float altitude3 = 10; 
+  required float pressure3 = 11;
+  required float axis_22 = 12;
+  required float temperature34 = 13;
+  required float altitude23 = 14; 
+  required float pressure23 = 15;
+  required float axis_x23 = 16;
+  required float temperature345 = 17;
+  required float altitude235 = 18; 
+  required float pressure235 = 19;
+  required float axis_x235 = 20;
+  required float pressure245 = 21;
+  required float axis_x245 = 22;
+}
+

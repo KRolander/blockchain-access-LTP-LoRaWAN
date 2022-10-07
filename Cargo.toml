@@ -1,0 +1,51 @@
+[package]
+name = "iotb-gateway"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+protobuf = "2.27.1"
+hex = "0.4.3"
+paho-mqtt = "0.11.1"
+threadpool = "1.8.1"
+rumqttc = "0.13.0"
+clap = { version = "3.2.8", features = ["derive"] }
+thiserror = "1.0.31"
+json = "0.12.4"
+base64 = "0.13.0"
+chrono = "0.4.22"
+
+k256 = { version = "0.10.4", features = ['ecdsa', 'sha2'] }
+sha2 = "0.10.2"
+
+substrate-api-client = { git = "https://github.com/ilyagrishkov/substrate-api-client.git", branch = "cl/event_timeout"}
+
+codec = { package = "parity-scale-codec", features = ["derive"], version = "3.0.0" }
+sp-core = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-io = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-runtime = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "master" }
+sp-keyring = { version = "6.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "master" }
+regex = "1.5.6"
+rand = "0.8"
+secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], default-features = false}
+bitcoin_hashes = "0.11.0"
+[build-dependencies]
+protobuf-codegen-pure = "2.27.1"
+protoc-rust = "2.27.1"
+
+[[bin]]
+name = "gateway"
+path = "src/main.rs"
+
+[[bin]]
+name = "generator"
+path = "src/bin/generator.rs"
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+
+[lib]
+crate-type = ["lib"]
+
+
